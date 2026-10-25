@@ -1,0 +1,9 @@
+# Build artifacts
+deb-output/
+*.deb
+
+# Docker
+*.dockerignore
+
+# Cargo cache volume (created by script)
+# niri-cargo-cache (docker volume)
