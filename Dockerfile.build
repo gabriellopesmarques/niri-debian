@@ -1,0 +1,63 @@
+# Dockerfile to build niri and xwayland-satellite on Debian Trixie
+# Usage: docker build -t niri-builder -f Dockerfile.build .
+#        docker run --rm -v niri-cargo-cache:/root/.cargo niri-builder
+#        docker cp <container>:/out/niri ./niri
+#        docker cp <container>:/out/xwayland-satellite ./xwayland-satellite
+
+FROM debian:trixie-slim AS builder
+
+# Fixed versions (must match install.sh)
+ARG NIRI_VERSION=v26.04
+ARG XWAYLAND_SATELLITE_VERSION=v0.8.2
+
+# Volume for Cargo cache (persists between builds)
+VOLUME /root/.cargo
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    clang \
+    cargo \
+    git \
+    pkg-config \
+    rustc \
+    libdbus-1-dev \
+    libdisplay-info-dev \
+    libegl1-mesa-dev \
+    libgbm-dev \
+    libinput-dev \
+    libpango1.0-dev \
+    libpipewire-0.3-dev \
+    libseat-dev \
+    libsystemd-dev \
+    libudev-dev \
+    libwayland-dev \
+    libxcb-cursor-dev \
+    libxcb1-dev \
+    libxkbcommon-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Rust version (>= 1.85.0)
+RUN rustc --version | awk '{print $2}' | awk -F. '{ if ($1 > 1 || ($1 == 1 && $2 > 85) || ($1 == 1 && $2 == 85 && $3 >= 0)) exit 0; else exit 1 }' \
+    || (echo "Rust 1.85.0 or newer is required" && exit 1)
+
+# Working directories
+WORKDIR /build
+
+# Clone and build niri
+RUN git clone --depth 1 --branch ${NIRI_VERSION} https://github.com/niri-wm/niri.git niri \
+    && cd niri \
+    && cargo build --locked --release \
+    && mkdir -p /out \
+    && cp target/release/niri /out/niri \
+    && cp resources/niri-session /out/niri-session \
+    && cp resources/niri.service /out/niri.service \
+    && cp resources/niri-shutdown.target /out/niri-shutdown.target \
+    && cp resources/niri.desktop /out/niri.desktop
+
+# Clone and build xwayland-satellite
+RUN git clone --depth 1 --branch ${XWAYLAND_SATELLITE_VERSION} https://github.com/Supreeeme/xwayland-satellite.git xwayland-satellite \
+    && cd xwayland-satellite \
+    && cargo build --locked --release \
+    && cp target/release/xwayland-satellite /out/xwayland-satellite
